@@ -1,9 +1,7 @@
 (ns kate.core
-  (:require [clojure.string :as str]))
-
-(def dir (file-seq (clojure.java.io/file "site")))
-
-(def file (first (filter-files files)))
+  (:require [clojure.string :as str]
+            [clojure.java.io :refer [file]]
+            [clojure.pprint :refer [pprint]]))
 
 ;; lifted from https://groups.google.com/d/msg/clojure/UdFLYjLvNRs/NqlA7wnLCE0J
 (defn deep-merge
@@ -19,10 +17,11 @@
 
 (defn add-file [coll file]
   (let [path (path-vec file)
-        shit (assoc-in {} path file)]
-    (deep-merge coll shit)))
+        path-map (assoc-in {} path file)]
+    (deep-merge coll path-map)))
 
-(defn convert-dir [dir]
-  (reduce add-file {} dir))
+(defn convert-dir [pathName]
+  (let [dir (file-seq (file pathName))]
+    (reduce add-file {} dir)))
 
-(clojure.pprint/pprint (convert-dir dir))
+(pprint (convert-dir "site"))
