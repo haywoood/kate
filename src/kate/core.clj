@@ -1,27 +1,56 @@
 (ns kate.core
   (:require [clojure.string :as str]
             [clojure.java.io :refer [file]]
-            [clojure.pprint :refer [pprint]]))
+            [clojure.pprint :refer [pprint]]
+            [clojure.zip :as zip]))
 
-;; lifted from https://groups.google.com/d/msg/clojure/UdFLYjLvNRs/NqlA7wnLCE0J
-(defn deep-merge
-  "Recursively merges maps. If keys are not maps, the last value wins."
-  [& vals]
-  (if (every? map? vals)
-    (apply merge-with deep-merge vals)
-    (last vals)))
+(def _file (nth (file-seq (file "site")) 1))
 
-(defn path-vec [file]
-  (let [path (-> file bean :path (str/split #"/"))]
-    (mapv keyword path)))
+(def _file-bean (bean _file))
 
-(defn add-file [coll file]
-  (let [path (path-vec file)
-        path-map (assoc-in {} path file)]
-    (deep-merge coll path-map)))
+(def FS
+  [[:site]
+   [:site :drawing]
+   [:site :drawing :tehe.jpg]
+   [:site :illustration]
+   [:site :illustration :jacolyn]
+   [:site :illustration :jacolyn :1-jacolyn.jpg]
+   [:site :illustration :jacolyn :description.md]
+   [:site :illustration :war-machine]
+   [:site :illustration :war-machine :1-war-machine.jpg]
+   [:site :illustration :war-machine :description.md]])
 
-(defn convert-dir [pathName]
-  (let [dir (file-seq (file pathName))]
-    (reduce add-file {} dir)))
+(defn make-file-map [file-map file]
+  (let [path (-> file :path (str/split #"/"))
+        path-vec (mapv keyword path)
+        is-file (re-find #"\." (str (last path-vec)))
+        category-path (if (not= (count path-vec) 1)
+                        (subvec path-vec 0 2)
+                        path-vec)
+        has-meta (get-in file-map category-path)
+        new-file-map (if has-meta
+                       file-map
+                       (assoc-in file-map category-path
+                               {:meta {} :entries []}))]
+    (if is-file
+      (let [project-name (name (nth path-vec (- (count path-vec) 2)))
+            file-map {:name (name (last path-vec)) :file "file"}
+            entries-path (conj category-path :entries)
+            _entries (get-in new-file-map entries-path)
+            entries (conj _entries file-map)
+            new-file-map (assoc-in new-file-map entries-path entries)]
+        new-file-map)
+      new-file-map)))
 
-(pprint (convert-dir "site"))
+; what I'm working towards
+{:site {:blog {:meta {}
+               :entries []}
+        :drawing {:meta {}
+                  :entries []}
+        :illustration {:meta {}
+                       :entries []}}}
+
+(def files (map bean (file-seq (file "site"))))
+
+(let [file-map (reduce make-file-map {} files)]
+  (pprint file-map))
