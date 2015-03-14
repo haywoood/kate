@@ -2,55 +2,45 @@
   (:require [clojure.string :as str]
             [clojure.java.io :refer [file]]
             [clojure.pprint :refer [pprint]]
-            [clojure.zip :as zip]))
+            [frontmatter.core :refer [parse]]))
 
-(def _file (nth (file-seq (file "site")) 1))
+;; figure out how to check java.io.file encoding
+(defn is-utf8 [path]
+  (let [ext (-> path (str/split #"\.") last)]
+    (= ext "md")))
 
-(def _file-bean (bean _file))
+(defn readdir [path]
+  (->> (file-seq (file path))
+       (filter #(.isFile %))
+       (mapv #(.getPath %))))
 
-(def FS
-  [[:site]
-   [:site :drawing]
-   [:site :drawing :tehe.jpg]
-   [:site :illustration]
-   [:site :illustration :jacolyn]
-   [:site :illustration :jacolyn :1-jacolyn.jpg]
-   [:site :illustration :jacolyn :description.md]
-   [:site :illustration :war-machine]
-   [:site :illustration :war-machine :1-war-machine.jpg]
-   [:site :illustration :war-machine :description.md]])
+(defn readfile [path]
+  (let [utf8 (is-utf8 path)]
+    (if utf8
+      (let [{:keys [body frontmatter]} (parse path)]
+        {:contents body
+         :frontmatter frontmatter
+         :file (bean (file path))})
+      {:contents (slurp path)
+       :frontmatter nil
+       :file (bean (file path))})))
 
-(defn make-file-map [file-map file]
-  (let [path (-> file :path (str/split #"/"))
-        path-vec (mapv keyword path)
-        is-file (re-find #"\." (str (last path-vec)))
-        category-path (if (not= (count path-vec) 1)
-                        (subvec path-vec 0 2)
-                        path-vec)
-        has-meta (get-in file-map category-path)
-        new-file-map (if has-meta
-                       file-map
-                       (assoc-in file-map category-path
-                               {:meta {} :entries []}))]
-    (if is-file
-      (let [project-name (name (nth path-vec (- (count path-vec) 2)))
-            file-map {:name (name (last path-vec)) :file "file"}
-            entries-path (conj category-path :entries)
-            _entries (get-in new-file-map entries-path)
-            entries (conj _entries file-map)
-            new-file-map (assoc-in new-file-map entries-path entries)]
-        new-file-map)
-      new-file-map)))
+(defn memo [memo data]
+  (assoc memo (:path data) (:file data)))
 
-; what I'm working towards
-{:site {:blog {:meta {}
-               :entries []}
-        :drawing {:meta {}
-                  :entries []}
-        :illustration {:meta {}
-                       :entries []}}}
+(defn Kate [{:keys [source]
+             :or {:source "src"}
+             :as config}]
+  (let [paths (readdir source)
+        files (mapv readfile paths)
+        data (mapv (fn [path file]
+               {:path (keyword path) :file file}) paths files)]
+    (reduce memo {} data)))
 
-(def files (map bean (file-seq (file "site"))))
+;; the dream
+;; (-> (Kate "site")
+;;      markdown
+;;      templates
+;;      build)
 
-(let [file-map (reduce make-file-map {} files)]
-  (pprint file-map))
+(Kate {:source "site"})
