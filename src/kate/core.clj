@@ -15,15 +15,11 @@
        (mapv #(.getPath %))))
 
 (defn readfile [path]
-  (let [utf8 (is-utf8 path)]
-    (if utf8
-      (let [{:keys [body frontmatter]} (parse path)]
-        {:contents body
-         :frontmatter frontmatter
-         :file (bean (file path))})
-      {:contents (slurp path)
-       :frontmatter nil
-       :file (bean (file path))})))
+  (merge {:file (bean (file path))}
+    (if-let [{:keys [body frontmatter]} (and (is-utf8 path) (parse path))]
+      {:contents body
+       :frontmatter frontmatter}
+      {:contents (slurp path)})))
 
 (defn memo [memo data]
   (assoc memo (:path data) (:file data)))
